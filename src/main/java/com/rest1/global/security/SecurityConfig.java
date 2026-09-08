@@ -18,7 +18,11 @@ import java.util.List;
 public class SecurityConfig {
 
     @Bean
-    SecurityFilterChain filterChain(HttpSecurity http, CustomAuthenticationEntryPoint authenticationEntryPoint) throws Exception {
+    SecurityFilterChain filterChain(
+            HttpSecurity http,
+            CustomAuthenticationEntryPoint authenticationEntryPoint,
+            CustomBearerTokenResolver bearerTokenResolver
+    ) throws Exception {
         http
                 .authorizeHttpRequests((authorizeHttpRequests) -> authorizeHttpRequests
                         .requestMatchers("/favicon.ico").permitAll()
@@ -33,6 +37,7 @@ public class SecurityConfig {
                 .csrf((csrf) -> csrf.disable())
                 .oauth2ResourceServer((oauth2) -> oauth2
                         .jwt(Customizer.withDefaults())
+                        .bearerTokenResolver(bearerTokenResolver)              // 토큰을 어디서 꺼낼지 (헤더 → 쿠키)
                         .authenticationEntryPoint(authenticationEntryPoint))   // 토큰 검증 실패 응답도 우리 양식으로
                 .headers((headers) -> headers
                         .addHeaderWriter(new XFrameOptionsHeaderWriter(

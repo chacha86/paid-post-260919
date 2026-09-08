@@ -299,4 +299,25 @@ public class ApiV1MemberControllerTest {
                 .andExpect(jsonPath("$.resultCode").value("401-4"))
                 .andExpect(jsonPath("$.msg").value("유효하지 않은 액세스 토큰입니다."));
     }
+
+    @Test
+    @DisplayName("내 정보, 유효한 accessToken을 쿠키로 전달")
+    void t9() throws Exception {
+        Member actor = memberRepository.findByUsername("user1").get();
+        String accessToken = memberService.genAccessToken(actor);
+
+        ResultActions resultActions = mvc
+                .perform(
+                        get("/api/v1/members/me")
+                                .cookie(new Cookie("accessToken", accessToken))
+                )
+                .andDo(print());
+
+        resultActions
+                .andExpect(handler().handlerType(ApiV1MemberController.class))
+                .andExpect(handler().methodName("me"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.resultCode").value("200-1"))
+                .andExpect(jsonPath("$.data.memberDto.id").value(actor.getId()));
+    }
 }
