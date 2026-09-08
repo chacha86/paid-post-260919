@@ -281,4 +281,22 @@ public class ApiV1MemberControllerTest {
                 .andExpect(jsonPath("$.data.memberDto.id").value(actor.getId()))
                 .andExpect(jsonPath("$.data.memberDto.name").value(actor.getName()));
     }
+
+    @Test
+    @DisplayName("내 정보, 유효하지 않은 accessToken을 Authorization: Bearer 로 전달")
+    void t8() throws Exception {
+        String wrongAccessToken = "wrong-access-token";
+
+        ResultActions resultActions = mvc
+                .perform(
+                        get("/api/v1/members/me")
+                                .header("Authorization", "Bearer " + wrongAccessToken)
+                )
+                .andDo(print());
+
+        resultActions
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.resultCode").value("401-4"))
+                .andExpect(jsonPath("$.msg").value("유효하지 않은 액세스 토큰입니다."));
+    }
 }

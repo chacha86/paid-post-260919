@@ -18,7 +18,7 @@ import java.util.List;
 public class SecurityConfig {
 
     @Bean
-    SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+    SecurityFilterChain filterChain(HttpSecurity http, CustomAuthenticationEntryPoint authenticationEntryPoint) throws Exception {
         http
                 .authorizeHttpRequests((authorizeHttpRequests) -> authorizeHttpRequests
                         .requestMatchers("/favicon.ico").permitAll()
@@ -32,25 +32,16 @@ public class SecurityConfig {
                         .anyRequest().authenticated())
                 .csrf((csrf) -> csrf.disable())
                 .oauth2ResourceServer((oauth2) -> oauth2
-                        .jwt(Customizer.withDefaults()))
+                        .jwt(Customizer.withDefaults())
+                        .authenticationEntryPoint(authenticationEntryPoint))   // 토큰 검증 실패 응답도 우리 양식으로
                 .headers((headers) -> headers
                         .addHeaderWriter(new XFrameOptionsHeaderWriter(
                                 XFrameOptionsHeaderWriter.XFrameOptionsMode.SAMEORIGIN)))
                 .exceptionHandling(
                         exceptionHandling -> exceptionHandling
-                                .authenticationEntryPoint((request, response, authenticationException) -> {
-                                    response.setContentType("application/json");
-                                    response.setStatus(401);
-                                    response.getWriter().write(
-                                            """
-                                                        {
-                                                            "resultCode": "401-1",
-                                                            "msg": "로그인 후 이용해주세요."
-                                                        }
-                                                    """);
-                                })
+                                .authenticationEntryPoint(authenticationEntryPoint)
                                 .accessDeniedHandler((request, response, accessDeniedException) -> {
-                                            response.setContentType("application/json");
+                                            response.setContentType("application/json;charset=UTF-8"); // charset이 없으면 실제 HTTP에서 한글이 ???로 깨진다
                                             response.setStatus(403);
                                             response.getWriter().write(
                                                     """
