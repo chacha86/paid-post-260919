@@ -2,13 +2,13 @@ package com.rest1.global.rq;
 
 import com.rest1.domain.member.member.entity.Member;
 import com.rest1.domain.member.member.service.MemberService;
-import com.rest1.global.security.SecurityUser;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Component;
 
 import java.util.Arrays;
@@ -23,17 +23,22 @@ public class Rq {
     private final HttpServletResponse response;
 
     public Member getActor() {
-
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        SecurityUser principal = (SecurityUser) authentication.getPrincipal();
-
-        long id = principal.getId();
-        String username = principal.getUsername();
-        String nickname = principal.getNickname();
-
-        Member member = new Member(id, username, nickname);
-
-        return member;
+        // 리소스 서버가 검증을 끝내면 SecurityContext의 principal은 Jwt 객체다.
+        // 우리는 그 안의 클레임(id, username, nickname)으로 Member를 만든다. (DB 조회 없음, 68강과 같은 사상)
+        return Optional
+                .ofNullable(
+                        SecurityContextHolder
+                                .getContext()
+                                .getAuthentication())
+                .map(Authentication::getPrincipal)
+                .filter(principal -> principal instanceof Jwt)
+                .map(principal -> (Jwt) principal)
+                .map(jwt -> new Member(
+                        ((Number) jwt.getClaim("id")).longValue(),
+                        jwt.getClaimAsString("username"),
+                        jwt.getClaimAsString("nickname")
+                ))
+                .orElseThrow(() -> new RuntimeException("로그인 후 이용해주세요."));
     }
 
     public void setHeader(String name, String value) {

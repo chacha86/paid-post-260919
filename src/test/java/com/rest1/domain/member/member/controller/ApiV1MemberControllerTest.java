@@ -273,9 +273,12 @@ public class ApiV1MemberControllerTest {
                 )
                 .andDo(print());
 
-        // 리소스 서버 검문소를 통과해서 컨트롤러까지 도달했는가
         resultActions
                 .andExpect(handler().handlerType(ApiV1MemberController.class))
-                .andExpect(handler().methodName("me"));
+                .andExpect(handler().methodName("me"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.resultCode").value("200-1"))
+                .andExpect(jsonPath("$.data.memberDto.id").value(actor.getId()))
+                .andExpect(jsonPath("$.data.memberDto.name").value(actor.getName()));
     }
 }
