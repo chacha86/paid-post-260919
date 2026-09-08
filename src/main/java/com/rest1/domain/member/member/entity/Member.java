@@ -50,6 +50,17 @@ public class Member extends BaseEntity {
         return "admin".equals(this.username);
     }
 
+    // JWT의 roles 클레임에 실을 값. 시큐리티 권한명(ROLE_ADMIN)이 아니라 우리 도메인 단어(ADMIN)를 쓴다.
+    public List<String> getRoles() {
+        List<String> roles = new ArrayList<>();
+
+        if(isAdmin()) {
+            roles.add("ADMIN");
+        }
+
+        return roles;
+    }
+
     public Collection<? extends GrantedAuthority> getAuthorities() {
         List<GrantedAuthority> authorities = new ArrayList<>();
 

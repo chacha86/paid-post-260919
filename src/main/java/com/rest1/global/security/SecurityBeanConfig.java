@@ -8,6 +8,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
+import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
@@ -34,5 +36,19 @@ public class SecurityBeanConfig {
                 .withSecretKey(secretKey)
                 .macAlgorithm(MacAlgorithm.HS512) // Ut.jwt(jjwt)는 키가 64바이트 이상이면 HS512로 서명한다. 검증도 같은 알고리즘이어야 한다.
                 .build();
+    }
+
+    // JWT 클레임 → 시큐리티 권한(GrantedAuthority) 변환 규칙
+    // 기본값은 "scope" 클레임을 SCOPE_ 접두어로 바꾼다. 우리는 "roles" 클레임을 ROLE_ 접두어로 바꾼다.
+    @Bean
+    public JwtAuthenticationConverter jwtAuthenticationConverter() {
+        JwtGrantedAuthoritiesConverter grantedAuthoritiesConverter = new JwtGrantedAuthoritiesConverter();
+        grantedAuthoritiesConverter.setAuthoritiesClaimName("roles");
+        grantedAuthoritiesConverter.setAuthorityPrefix("ROLE_");
+
+        JwtAuthenticationConverter jwtAuthenticationConverter = new JwtAuthenticationConverter();
+        jwtAuthenticationConverter.setJwtGrantedAuthoritiesConverter(grantedAuthoritiesConverter);
+
+        return jwtAuthenticationConverter;
     }
 }

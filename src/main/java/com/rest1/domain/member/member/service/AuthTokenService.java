@@ -20,7 +20,12 @@ public class AuthTokenService {
         return Ut.jwt.toString(
                 secretPattern,
                 expireSeconds,
-                Map.of("id", member.getId(), "username", member.getUsername(), "nickname", member.getNickname())
+                Map.of(
+                        "id", member.getId(),
+                        "username", member.getUsername(),
+                        "nickname", member.getNickname(),
+                        "roles", member.getRoles()   // 권한을 토큰에 싣는다. 리소스 서버는 이 클레임만 보고 인가한다.
+                )
         );
     }
 
