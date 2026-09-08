@@ -2,6 +2,7 @@ package com.rest1.domain.member.member.controller;
 
 import com.rest1.domain.member.member.entity.Member;
 import com.rest1.domain.member.member.repository.MemberRepository;
+import com.rest1.domain.member.member.service.MemberService;
 import com.rest1.standard.ut.Ut;
 import jakarta.servlet.http.Cookie;
 import org.hamcrest.Matchers;
@@ -33,6 +34,9 @@ public class ApiV1MemberControllerTest {
 
     @Autowired
     private MemberRepository memberRepository;
+
+    @Autowired
+    private MemberService memberService;
 
     @Value("${custom.jwt.secretPattern}")
     private String secretPattern;
@@ -252,5 +256,26 @@ public class ApiV1MemberControllerTest {
 
                     assertThat(Ut.jwt.isValid(newAccessToken, secretPattern)).isTrue();
                 });
+    }
+
+    @Test
+    @DisplayName("내 정보, 유효한 accessToken을 Authorization: Bearer 로 전달")
+    void t7() throws Exception {
+        Member actor = memberRepository.findByUsername("user1").get();
+        String accessToken = memberService.genAccessToken(actor);
+
+        assertThat(Ut.jwt.isValid(accessToken, secretPattern)).isTrue();
+
+        ResultActions resultActions = mvc
+                .perform(
+                        get("/api/v1/members/me")
+                                .header("Authorization", "Bearer " + accessToken)
+                )
+                .andDo(print());
+
+        // 리소스 서버 검문소를 통과해서 컨트롤러까지 도달했는가
+        resultActions
+                .andExpect(handler().handlerType(ApiV1MemberController.class))
+                .andExpect(handler().methodName("me"));
     }
 }

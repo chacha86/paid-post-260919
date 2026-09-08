@@ -5,6 +5,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 
@@ -27,10 +28,11 @@ public class SecurityBeanConfig {
     // 우리는 우리가 발급한 JWT를 우리 secret으로 검증한다.
     @Bean
     public JwtDecoder jwtDecoder() {
-        SecretKey secretKey = new SecretKeySpec(secretPattern.getBytes(StandardCharsets.UTF_8), "HmacSHA256");
+        SecretKey secretKey = new SecretKeySpec(secretPattern.getBytes(StandardCharsets.UTF_8), "HmacSHA512");
 
         return NimbusJwtDecoder
                 .withSecretKey(secretKey)
+                .macAlgorithm(MacAlgorithm.HS512) // Ut.jwt(jjwt)는 키가 64바이트 이상이면 HS512로 서명한다. 검증도 같은 알고리즘이어야 한다.
                 .build();
     }
 }
