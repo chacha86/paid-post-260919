@@ -6,6 +6,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.header.writers.frameoptions.XFrameOptionsHeaderWriter;
 import org.springframework.web.cors.CorsConfiguration;
@@ -35,6 +36,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/*/**").authenticated()
                         .anyRequest().authenticated())
                 .csrf((csrf) -> csrf.disable())
+                .sessionManagement((session) -> session
+                        .sessionCreationPolicy(SessionCreationPolicy.STATELESS))   // 토큰 방식이므로 세션(JSESSIONID)을 만들지 않는다
                 .oauth2ResourceServer((oauth2) -> oauth2
                         .jwt(Customizer.withDefaults())
                         .bearerTokenResolver(bearerTokenResolver)              // 토큰을 어디서 꺼낼지 (헤더 → 쿠키)
