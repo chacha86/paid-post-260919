@@ -285,7 +285,7 @@ public class ApiV1MemberControllerTest {
     @Test
     @DisplayName("내 정보, 유효하지 않은 accessToken을 Authorization: Bearer 로 전달")
     void t8() throws Exception {
-        String wrongAccessToken = "wrong-access-token";
+        String wrongAccessToken = "wrong.access.token"; // JWT 모양(세 토막)이지만 서명이 틀린 토큰
 
         ResultActions resultActions = mvc
                 .perform(

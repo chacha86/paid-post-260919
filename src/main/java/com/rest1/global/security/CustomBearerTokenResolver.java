@@ -27,10 +27,28 @@ public class CustomBearerTokenResolver implements BearerTokenResolver {
 
         String headerAuthorization = rq.getHeader("Authorization", "");
 
-        if (headerAuthorization.startsWith("Bearer ")) {
-            // 1순위 : Authorization: Bearer <accessToken>
-            accessToken = headerAuthorization.substring("Bearer ".length()).trim();
-            apiKey = "";
+        if (!headerAuthorization.isBlank()) {
+            // 1순위 : Authorization 헤더. 우리 규격은 셋 다 허용한다.
+            //   Bearer <accessToken>            (표준)
+            //   Bearer <apiKey>                 (p29 방식, 포스트맨·테스트 호환)
+            //   Bearer <apiKey> <accessToken>   (p29 방식)
+            if (!headerAuthorization.startsWith("Bearer "))
+                throw new OAuth2AuthenticationException(
+                        new OAuth2Error("401-2", "Authorization 헤더가 Bearer 형식이 아닙니다.", null)
+                );
+
+            String[] bits = headerAuthorization.substring("Bearer ".length()).trim().split(" ", 2);
+
+            if (bits.length == 2) {
+                apiKey = bits[0];
+                accessToken = bits[1];
+            } else if (isJwt(bits[0])) {
+                apiKey = "";
+                accessToken = bits[0];
+            } else {
+                apiKey = bits[0];
+                accessToken = "";
+            }
         } else {
             // 2순위 : 쿠키
             accessToken = rq.getCookieValue("accessToken", "");
@@ -62,5 +80,10 @@ public class CustomBearerTokenResolver implements BearerTokenResolver {
         rq.setHeader("accessToken", newAccessToken);
 
         return newAccessToken;
+    }
+
+    // JWT 는 "header.payload.signature" 세 토막이다. 그 모양이면 accessToken, 아니면 apiKey 로 본다.
+    private boolean isJwt(String value) {
+        return value.split("\\.").length == 3;
     }
 }
