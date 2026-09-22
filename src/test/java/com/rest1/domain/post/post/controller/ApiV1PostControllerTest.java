@@ -24,6 +24,7 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsInRelativeOrder;
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.matchesPattern;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
@@ -67,15 +68,17 @@ public class ApiV1PostControllerTest {
                 .andExpect(status().isOk());
 
         resultActions
-                .andExpect(jsonPath("$.length()").value(3))
-                .andExpect(jsonPath("$[*].id", containsInRelativeOrder(3, 1)))
-                .andExpect(jsonPath("$[0].id").value(3))
+                .andExpect(jsonPath("$.length()").value(5))   // 무료 3 + 유료 2
+                .andExpect(jsonPath("$[*].id", containsInRelativeOrder(5, 3, 1)))
+                .andExpect(jsonPath("$[0].id").value(5))
                 .andExpect(jsonPath("$[0].createDate").exists())
                 .andExpect(jsonPath("$[0].modifyDate").exists())
-                .andExpect(jsonPath("$[0].title").value("제목3"))
-                .andExpect(jsonPath("$[0].content").value("내용3"))
+                .andExpect(jsonPath("$[0].title").value("유료 글 2"))
+                .andExpect(jsonPath("$[0].content").value("유료 본문 2 - 구매한 회원만 볼 수 있다"))
                 .andExpect(jsonPath("$[0].authorId").value(4))
-                .andExpect(jsonPath("$[0].authorName").value("유저2"));
+                .andExpect(jsonPath("$[0].authorName").value("유저2"))
+                .andExpect(jsonPath("$[0].price").value(700))
+                .andExpect(jsonPath("$[4].price").value(0));
 
 
         // 하나 또는 2개 정도만 검증
@@ -147,8 +150,11 @@ public class ApiV1PostControllerTest {
                 .andExpect(handler().methodName("createItem"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.resultCode").value("201-1"))
-                .andExpect(jsonPath("$.msg").value("4번 게시물이 생성되었습니다."))
-                .andExpect(jsonPath("$.data.postDto.id").value(4))
+                // MySQL 은 트랜잭션을 롤백해도 AUTO_INCREMENT 를 되돌리지 않는다.
+                // 다른 테스트가 먼저 글을 만들었으면 번호가 밀리므로 "6번" 처럼 고정하지 않고 형식만 본다.
+                .andExpect(jsonPath("$.msg").value(matchesPattern("\\d+번 게시물이 생성되었습니다.")))
+                .andExpect(jsonPath("$.data.postDto.id").isNumber())
+                .andExpect(jsonPath("$.data.postDto.price").value(0))                // price 를 안 보내면 무료 글
                 .andExpect(jsonPath("$.data.postDto.createDate").exists())
                 .andExpect(jsonPath("$.data.postDto.modifyDate").exists())
                 .andExpect(jsonPath("$.data.postDto.title").value(title))
@@ -511,5 +517,62 @@ public class ApiV1PostControllerTest {
                 .andExpect(jsonPath("$.resultCode").value("403-2"))
                 .andExpect(jsonPath("$.msg").value("삭제 권한이 없습니다."));
 
+    }
+
+    @Test
+    @DisplayName("유료 글 작성 - price 를 주면 유료 글이 된다")
+    void t16() throws Exception {
+        Member author = memberRepository.findByUsername("user1").get();
+
+        ResultActions resultActions = mvc
+                .perform(
+                        post("/api/v1/posts")
+                                .header("Authorization", "Bearer %s".formatted(author.getApiKey()))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("""
+                                        {
+                                            "title": "유료 제목",
+                                            "content": "유료 내용",
+                                            "price": 700
+                                        }
+                                        """)
+                )
+                .andDo(print());
+
+        resultActions
+                .andExpect(handler().methodName("createItem"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.resultCode").value("201-1"))
+                .andExpect(jsonPath("$.data.postDto.price").value(700));
+
+        // 응답의 id 로 DB 를 다시 읽어 실제로 유료 글로 저장됐는지 본다 (id 를 고정하지 않는다)
+        Post post = postRepository.findAll().getLast();
+        assertThat(post.getTitle()).isEqualTo("유료 제목");
+        assertThat(post.isPaid()).isTrue();
+        assertThat(post.getPrice()).isEqualTo(700);
+    }
+
+    @Test
+    @DisplayName("유료 글 작성 - 음수 가격은 400")
+    void t17() throws Exception {
+        Member author = memberRepository.findByUsername("user1").get();
+
+        mvc
+                .perform(
+                        post("/api/v1/posts")
+                                .header("Authorization", "Bearer %s".formatted(author.getApiKey()))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("""
+                                        {
+                                            "title": "유료 제목",
+                                            "content": "유료 내용",
+                                            "price": -1
+                                        }
+                                        """)
+                )
+                .andDo(print())
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.resultCode").value("400-1"))
+                .andExpect(jsonPath("$.msg").value(containsString("price-PositiveOrZero")));   // 메시지 본문은 로케일에 따라 다르다
     }
 }

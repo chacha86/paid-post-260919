@@ -18,6 +18,7 @@ import java.util.Optional;
 public class Post extends BaseEntity {
     private String title;
     private String content;
+    private long price;   // 0 이면 무료 글, 0 보다 크면 유료 글 (CONTEXT: 유료 글은 별도 개체가 아니라 글의 속성)
 
     @ManyToOne(fetch = FetchType.LAZY)
     private Member author;
@@ -26,9 +27,18 @@ public class Post extends BaseEntity {
     private List<Comment> comments = new ArrayList<>();
 
     public Post(Member author, String title, String content) {
+        this(author, title, content, 0);
+    }
+
+    public Post(Member author, String title, String content, long price) {
         this.author = author;
         this.title = title;
         this.content = content;
+        this.price = price;
+    }
+
+    public boolean isPaid() {
+        return price > 0;
     }
 
     public void update(String title, String content) {

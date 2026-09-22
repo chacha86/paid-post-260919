@@ -11,7 +11,8 @@ public record PostDto(
         String title,
         String content,
         Long authorId,
-        String authorName
+        String authorName,
+        long price
 ) {
     public PostDto(Post post) {
         this(
@@ -21,7 +22,8 @@ public record PostDto(
                 post.getTitle(),
                 post.getContent(),
                 post.getAuthor().getId(),
-                post.getAuthor().getName()
+                post.getAuthor().getName(),
+                post.getPrice()
         );
     }
 }

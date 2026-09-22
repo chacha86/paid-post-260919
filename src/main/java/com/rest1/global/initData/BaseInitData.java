@@ -65,6 +65,9 @@ public class BaseInitData {
         Post post1 = postService.write(member1, "제목1", "내용1");
         Post post2 = postService.write(member1, "제목2", "내용2");
         Post post3 = postService.write(member2, "제목3", "내용3");
+        // 유료 글 2개(각 700 포인트). 뒤에서 한 지갑으로 서로 다른 두 글을 사는 실습에 쓴다.
+        Post post4 = postService.write(member2, "유료 글 1", "유료 본문 1 - 구매한 회원만 볼 수 있다", 700);
+        Post post5 = postService.write(member2, "유료 글 2", "유료 본문 2 - 구매한 회원만 볼 수 있다", 700);
 
         post1.addComment(member1, "댓글 1-1");
         post1.addComment(member1, "댓글 1-2");
