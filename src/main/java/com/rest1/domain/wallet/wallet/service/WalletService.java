@@ -1,6 +1,7 @@
 package com.rest1.domain.wallet.wallet.service;
 
 import com.rest1.domain.member.member.entity.Member;
+import com.rest1.domain.order.order.entity.Order;
 import com.rest1.domain.wallet.wallet.entity.Ledger;
 import com.rest1.domain.wallet.wallet.entity.LedgerType;
 import com.rest1.domain.wallet.wallet.entity.Wallet;
@@ -34,6 +35,12 @@ public class WalletService {
         return ledgerRepository.save(new Ledger(wallet, LedgerType.CHARGE, amount, wallet.getBalance()));
     }
 
+    // 구매 차감: 잔액에서 빼고 원장에 - 한 줄. 주문 확정과 같은 트랜잭션 안에서 불린다
+    public Ledger pay(Wallet wallet, Order order) {
+        wallet.pay(order.getPrice());
+        return ledgerRepository.save(new Ledger(wallet, LedgerType.PURCHASE, -order.getPrice(), wallet.getBalance(), order));
+    }
+
     public List<Ledger> findLedgers(Wallet wallet) {
         return ledgerRepository.findByWalletOrderByIdAsc(wallet);
     }
@@ -48,5 +55,9 @@ public class WalletService {
 
     public long countLedgers() {
         return ledgerRepository.count();
+    }
+
+    public long countLedgers(Wallet wallet, LedgerType type) {
+        return ledgerRepository.countByWalletAndType(wallet, type);
     }
 }

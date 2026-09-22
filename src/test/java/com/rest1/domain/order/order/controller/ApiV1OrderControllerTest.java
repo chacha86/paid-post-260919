@@ -5,6 +5,8 @@ import com.rest1.domain.member.member.repository.MemberRepository;
 import com.rest1.domain.order.order.entity.Order;
 import com.rest1.domain.order.order.entity.OrderStatus;
 import com.rest1.domain.order.order.service.OrderService;
+import com.rest1.domain.wallet.wallet.entity.Ledger;
+import com.rest1.domain.wallet.wallet.entity.LedgerType;
 import com.rest1.domain.wallet.wallet.entity.Wallet;
 import com.rest1.domain.wallet.wallet.service.WalletService;
 import com.rest1.support.TestMySqlConfig;
@@ -18,6 +20,8 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.matchesPattern;
@@ -132,5 +136,145 @@ public class ApiV1OrderControllerTest {
                 .andDo(print())
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("PENDING"));
+    }
+
+    @Test
+    @DisplayName("주문 확정 - 잔액 1000 에서 700 글을 확정하면 잔액 300, 구매 원장 1줄, 주문 CONFIRMED")
+    void t4() throws Exception {
+        Member actor = memberRepository.findByUsername("user1").get();
+
+        mvc
+                .perform(
+                        post("/api/v1/posts/4/orders")
+                                .header("Authorization", "Bearer %s".formatted(actor.getApiKey()))
+                )
+                .andDo(print())
+                .andExpect(status().isCreated());
+
+        Order order = orderService.findByBuyerId(actor.getId()).getLast();
+
+        ResultActions resultActions = mvc
+                .perform(
+                        post("/api/v1/orders/%d/confirm".formatted(order.getId()))
+                                .header("Authorization", "Bearer %s".formatted(actor.getApiKey()))
+                )
+                .andDo(print());
+
+        resultActions
+                .andExpect(handler().handlerType(ApiV1OrderController.class))
+                .andExpect(handler().methodName("confirmItem"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.resultCode").value("200-1"))
+                .andExpect(jsonPath("$.msg").value("%d번 주문이 확정되었습니다.".formatted(order.getId())))
+                .andExpect(jsonPath("$.data.orderDto.status").value("CONFIRMED"))
+                .andExpect(jsonPath("$.data.balance").value(300));
+
+        // 응답만 믿지 않고 DB 상태를 본다: 주문·지갑·원장 셋이 같이 바뀌었나
+        assertThat(orderService.findById(order.getId()).get().getStatus()).isEqualTo(OrderStatus.CONFIRMED);
+
+        Wallet wallet = walletService.findByMemberId(actor.getId()).get();
+        assertThat(wallet.getBalance()).isEqualTo(300);
+
+        List<Ledger> ledgers = walletService.findLedgers(wallet);
+        assertThat(ledgers).hasSize(2);
+        assertThat(ledgers.get(1).getType()).isEqualTo(LedgerType.PURCHASE);
+        assertThat(ledgers.get(1).getAmount()).isEqualTo(-700);
+        assertThat(ledgers.get(1).getBalanceAfter()).isEqualTo(300);
+        assertThat(ledgers.get(1).getOrder().getId()).isEqualTo(order.getId());
+        assertThat(walletService.sumLedger(wallet)).isEqualTo(wallet.getBalance());   // 불변식
+    }
+
+    @Test
+    @DisplayName("주문 확정 - 순차로 두 번째 700 글을 확정하면 잔액 부족 402-1, 주문은 대기로 남고 원장은 안 늘어난다")
+    void t5() throws Exception {
+        Member actor = memberRepository.findByUsername("user1").get();
+
+        mvc
+                .perform(
+                        post("/api/v1/posts/4/orders")
+                                .header("Authorization", "Bearer %s".formatted(actor.getApiKey()))
+                )
+                .andDo(print())
+                .andExpect(status().isCreated());
+        Order first = orderService.findByBuyerId(actor.getId()).getLast();
+
+        mvc
+                .perform(
+                        post("/api/v1/posts/5/orders")
+                                .header("Authorization", "Bearer %s".formatted(actor.getApiKey()))
+                )
+                .andDo(print())
+                .andExpect(status().isCreated());
+        Order second = orderService.findByBuyerId(actor.getId()).getLast();
+
+        mvc
+                .perform(
+                        post("/api/v1/orders/%d/confirm".formatted(first.getId()))
+                                .header("Authorization", "Bearer %s".formatted(actor.getApiKey()))
+                )
+                .andDo(print())
+                .andExpect(status().isOk());
+
+        mvc
+                .perform(
+                        post("/api/v1/orders/%d/confirm".formatted(second.getId()))
+                                .header("Authorization", "Bearer %s".formatted(actor.getApiKey()))
+                )
+                .andDo(print())
+                .andExpect(status().is(402))
+                .andExpect(jsonPath("$.resultCode").value("402-1"))
+                .andExpect(jsonPath("$.msg").value("잔액이 부족합니다."));
+
+        assertThat(orderService.findById(second.getId()).get().getStatus()).isEqualTo(OrderStatus.PENDING);
+
+        Wallet wallet = walletService.findByMemberId(actor.getId()).get();
+        assertThat(wallet.getBalance()).isEqualTo(300);
+        assertThat(walletService.findLedgers(wallet)).hasSize(2);   // 충전 1 + 구매 1. 실패한 확정은 흔적이 없다
+        assertThat(walletService.sumLedger(wallet)).isEqualTo(300);
+    }
+
+    @Test
+    @DisplayName("주문 확정 - 남의 주문은 403-3, 이미 확정된 주문은 409-2")
+    void t6() throws Exception {
+        Member buyer = memberRepository.findByUsername("user1").get();
+        Member other = memberRepository.findByUsername("user3").get();
+
+        mvc
+                .perform(
+                        post("/api/v1/posts/4/orders")
+                                .header("Authorization", "Bearer %s".formatted(buyer.getApiKey()))
+                )
+                .andDo(print())
+                .andExpect(status().isCreated());
+        Order order = orderService.findByBuyerId(buyer.getId()).getLast();
+
+        mvc
+                .perform(
+                        post("/api/v1/orders/%d/confirm".formatted(order.getId()))
+                                .header("Authorization", "Bearer %s".formatted(other.getApiKey()))
+                )
+                .andDo(print())
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.resultCode").value("403-3"));
+
+        mvc
+                .perform(
+                        post("/api/v1/orders/%d/confirm".formatted(order.getId()))
+                                .header("Authorization", "Bearer %s".formatted(buyer.getApiKey()))
+                )
+                .andDo(print())
+                .andExpect(status().isOk());
+
+        mvc
+                .perform(
+                        post("/api/v1/orders/%d/confirm".formatted(order.getId()))
+                                .header("Authorization", "Bearer %s".formatted(buyer.getApiKey()))
+                )
+                .andDo(print())
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.resultCode").value("409-2"));
+
+        // 두 번째 확정이 거절됐으니 잔액은 한 번만 빠져 있어야 한다
+        assertThat(walletService.findByMemberId(buyer.getId()).get().getBalance()).isEqualTo(300);
     }
 }

@@ -1,6 +1,7 @@
 package com.rest1.domain.wallet.wallet.entity;
 
 import com.rest1.domain.member.member.entity.Member;
+import com.rest1.global.exception.ServiceException;
 import com.rest1.global.jpa.entity.BaseEntity;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -40,5 +41,13 @@ public class Wallet extends BaseEntity {
 
     public boolean canPay(long price) {
         return this.balance >= price;
+    }
+
+    // "확인하고 빼기". 잔액이 모자라면 예외 → 호출한 쪽 트랜잭션이 통째로 롤백된다
+    public void pay(long price) {
+        if (!canPay(price)) {
+            throw new ServiceException("402-1", "잔액이 부족합니다.");
+        }
+        this.balance -= price;
     }
 }
