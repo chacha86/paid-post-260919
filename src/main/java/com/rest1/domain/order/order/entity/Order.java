@@ -54,6 +54,17 @@ public class Order extends BaseEntity {
         }
     }
 
+    // 확정된 주문의 회원이 본문을 처음 열면 VIEWED. 이미 VIEWED 면 그대로 (열람은 한 번만 기록)
+    public void markViewed() {
+        if (this.status == OrderStatus.CONFIRMED) {
+            this.status = OrderStatus.VIEWED;
+        }
+    }
+
+    public boolean isPurchased() {
+        return this.status == OrderStatus.CONFIRMED || this.status == OrderStatus.VIEWED;
+    }
+
     // 전이: PENDING → CONFIRMED. 포인트 차감(WalletService.pay)과 같은 트랜잭션에서 불려야 한다
     public void confirm() {
         checkPending();

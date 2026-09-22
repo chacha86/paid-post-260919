@@ -22,6 +22,15 @@ public class Rq {
     private final HttpServletRequest request;
     private final HttpServletResponse response;
 
+    // 로그인 안 했으면 null. 누구나 볼 수 있는 API(글 단건 조회)에서 "로그인했다면 누구인지"만 알고 싶을 때
+    public Member getActorOrNull() {
+        try {
+            return getActor();
+        } catch (RuntimeException e) {
+            return null;
+        }
+    }
+
     public Member getActor() {
         // 리소스 서버가 검증을 끝내면 SecurityContext의 principal은 Jwt 객체다.
         // 우리는 그 안의 클레임(id, username, nickname)으로 Member를 만든다. (DB 조회 없음, 68강과 같은 사상)
