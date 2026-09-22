@@ -1,5 +1,8 @@
 package com.rest1.domain.post.post.controller;
 
+import com.rest1.support.TestMySqlConfig;
+import org.springframework.context.annotation.Import;
+
 import com.rest1.domain.member.member.entity.Member;
 import com.rest1.domain.member.member.repository.MemberRepository;
 import com.rest1.domain.post.post.entity.Post;
@@ -28,6 +31,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @SpringBootTest
 @ActiveProfiles("test")
+@Import(TestMySqlConfig.class)   // 테스트용 MySQL 컨테이너를 붙인다
 @AutoConfigureMockMvc
 @Transactional
 public class ApiV1PostControllerTest {

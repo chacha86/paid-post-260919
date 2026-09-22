@@ -36,7 +36,10 @@ dependencies {
     annotationProcessor("org.projectlombok:lombok")
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
-    runtimeOnly("com.h2database:h2")
+    runtimeOnly("com.h2database:h2")                                   // dev 프로필(bootRun)은 그대로 H2
+    runtimeOnly("com.mysql:mysql-connector-j")                          // 테스트가 붙을 MySQL 드라이버
+    testImplementation("org.springframework.boot:spring-boot-testcontainers") // @ServiceConnection
+    testImplementation("org.testcontainers:mysql")                      // MySQLContainer (버전은 Boot BOM이 관리)
     implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.13")
 
     implementation("io.jsonwebtoken:jjwt-api:0.12.6")
