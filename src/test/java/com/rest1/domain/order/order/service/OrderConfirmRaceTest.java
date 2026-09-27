@@ -2,27 +2,34 @@ package com.rest1.domain.order.order.service;
 
 import com.rest1.domain.member.member.entity.Member;
 import com.rest1.domain.order.order.entity.Order;
+import com.rest1.domain.wallet.wallet.service.WalletService;
 import com.rest1.global.exception.ServiceException;
 import com.rest1.support.RaceFixture;
 import com.rest1.support.RaceMySqlConfig;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
 
 // 지갑 잔액 경쟁: 한 지갑(1000)으로 서로 다른 700 글 두 개의 대기 주문을 "동시에" 확정한다.
 // 기대: 하나만 확정(OK), 하나는 잔액 부족(402-1)으로 대기 유지, 잔액 300, 구매 원장 1줄, 원장 합계 == 잔액.
@@ -46,9 +53,23 @@ public class OrderConfirmRaceTest {
     @Autowired
     private RaceFixture fixture;
 
+    // 10강: 실행 순서 통제 장치(테스트 전용). 지갑을 읽는 순간을 가로챈다.
+    // (JPA 리포지토리는 인터페이스 프록시라 스파이의 callRealMethod 가 안 된다 → 구체 클래스인 서비스를 스파이한다)
+    @MockitoSpyBean
+    private WalletService walletService;
+
     @BeforeEach
     void reset() {
+        Mockito.reset(walletService);   // 앞 테스트가 걸어 둔 장치를 푼다
         fixture.resetUser1();
+    }
+
+    // 시간 제한 대기. 상대가 락에 막혀 영영 못 오면 3초 뒤 포기하고 진행한다 (재현 장치가 교착을 만들지 않게)
+    private static void awaitQuietly(CyclicBarrier barrier) {
+        try { barrier.await(3, TimeUnit.SECONDS); } catch (Exception e) { /* 진행 */ }
+    }
+    private static void awaitQuietly(CountDownLatch latch) {
+        try { latch.await(3, TimeUnit.SECONDS); } catch (Exception e) { /* 진행 */ }
     }
 
     // 확정 한 번 = 트랜잭션 한 개. 컨트롤러 confirmItem 이 하는 일(조회 → 서비스)을 그대로 옮겼다.
@@ -70,6 +91,11 @@ public class OrderConfirmRaceTest {
 
     // 두 확정을 동시에 실행하고 각 스레드의 결과를 모은다. 끝날 때까지 기다린다.
     private List<String> confirmConcurrently(List<Long> orderIds) throws Exception {
+        return confirmConcurrently(orderIds, new CountDownLatch(1));
+    }
+
+    // firstDone: 먼저 끝난 스레드가 내린다 (10강 통제 장치가 "첫 번째 커밋 뒤에 두 번째 진행" 을 만들 때 쓴다)
+    private List<String> confirmConcurrently(List<Long> orderIds, CountDownLatch firstDone) throws Exception {
         Member actor = fixture.user1Actor();
         ExecutorService pool = Executors.newFixedThreadPool(orderIds.size());
         CountDownLatch start = new CountDownLatch(1);   // 출발선. 둘 다 준비되면 같이 출발
@@ -77,7 +103,9 @@ public class OrderConfirmRaceTest {
         for (Long orderId : orderIds) {
             futures.add(pool.submit(() -> {
                 start.await();
-                return confirmInNewTransaction(orderId, actor);
+                String outcome = confirmInNewTransaction(orderId, actor);
+                firstDone.countDown();
+                return outcome;
             }));
         }
         start.countDown();
@@ -110,5 +138,37 @@ public class OrderConfirmRaceTest {
                 + " deadlock=" + deadlock + " other=" + other);
 
         assertThat(clean).as("%d회 중 깨끗하게 끝난 회수 (OK + 402-1, 상태 일치)".formatted(runs)).isEqualTo(runs);
+    }
+
+    @Test
+    @DisplayName("순서 강제 - 둘 다 잔액 1000 을 읽고, 첫 번째가 커밋한 뒤 두 번째가 진행하면")
+    void t2() throws Exception {
+        List<Long> orderIds = fixture.createTwoPendingOrders();
+
+        // 순서 강제: ① 둘 다 지갑을 읽을 때까지 대기 → ② 먼저 도착한 스레드만 진행해 커밋 → ③ 두 번째 스레드 진행
+        CyclicBarrier bothRead = new CyclicBarrier(2);
+        CountDownLatch firstDone = new CountDownLatch(1);
+        AtomicInteger arrival = new AtomicInteger();
+        doAnswer(invocation -> {
+            Object wallet = invocation.callRealMethod();   // 진짜로 지갑을 읽는다 (여기서 둘 다 balance=1000 을 본다)
+            int order = arrival.getAndIncrement();         // 내가 몇 번째로 도착했나 (0, 1)
+            awaitQuietly(bothRead);                        // ① 상대도 읽을 때까지
+            if (order == 1) awaitQuietly(firstDone);       // ③ 두 번째 도착자는 첫 번째가 끝난 뒤에
+            return wallet;
+        }).when(walletService).findByMemberId(any());
+
+        List<String> results = confirmConcurrently(orderIds, firstDone);
+        Mockito.reset(walletService);   // 관찰 단계에서는 장치를 끈다
+
+        RaceFixture.Snapshot s = fixture.snapshot();
+        System.out.println("EVIDENCE controlled results=" + results + " confirmed=" + s.confirmed() + " pending=" + s.pending()
+                + " balance=" + s.balance() + " purchaseLedgers=" + s.purchaseLedgers() + " ledgerSum=" + s.ledgerSum());
+
+        assertThat(results).as("스레드 결과: 하나는 OK, 하나는 402-1").containsExactlyInAnyOrder("OK", "402-1");
+        assertThat(s.confirmed()).as("확정된 주문 수").isEqualTo(1);
+        assertThat(s.pending()).as("대기로 남은 주문 수").isEqualTo(1);
+        assertThat(s.balance()).as("잔액").isEqualTo(300);
+        assertThat(s.purchaseLedgers()).as("구매 원장 수").isEqualTo(1);
+        assertThat(s.ledgerSum()).as("원장 합계 == 잔액").isEqualTo(s.balance());
     }
 }
