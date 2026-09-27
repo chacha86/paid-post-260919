@@ -47,4 +47,16 @@ public class Order extends BaseEntity {
             throw new ServiceException("403-3", "내 주문이 아닙니다.");
         }
     }
+
+    public void checkPending() {
+        if (this.status != OrderStatus.PENDING) {
+            throw new ServiceException("409-2", "대기 상태의 주문만 확정할 수 있습니다.");
+        }
+    }
+
+    // 전이: PENDING → CONFIRMED. 포인트 차감(WalletService.pay)과 같은 트랜잭션에서 불려야 한다
+    public void confirm() {
+        checkPending();
+        this.status = OrderStatus.CONFIRMED;
+    }
 }

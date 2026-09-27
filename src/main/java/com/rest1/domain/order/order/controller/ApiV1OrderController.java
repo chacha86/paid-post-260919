@@ -6,6 +6,7 @@ import com.rest1.domain.order.order.entity.Order;
 import com.rest1.domain.order.order.service.OrderService;
 import com.rest1.domain.post.post.entity.Post;
 import com.rest1.domain.post.post.service.PostService;
+import com.rest1.domain.wallet.wallet.service.WalletService;
 import com.rest1.global.rq.Rq;
 import com.rest1.global.rsData.RsData;
 import io.swagger.v3.oas.annotations.Operation;
@@ -26,6 +27,7 @@ public class ApiV1OrderController {
 
     private final OrderService orderService;
     private final PostService postService;
+    private final WalletService walletService;
     private final Rq rq;
 
     record OrderCreateResBody(
@@ -48,6 +50,31 @@ public class ApiV1OrderController {
                 "201-1",
                 "%d번 주문이 생성되었습니다.".formatted(order.getId()),
                 new OrderCreateResBody(new OrderDto(order))
+        );
+    }
+
+    record OrderConfirmResBody(
+            OrderDto orderDto,
+            long balance      // 확정 직후 잔액
+    ) {
+    }
+
+    @PostMapping("/orders/{id}/confirm")
+    @Transactional
+    @Operation(summary = "주문 확정 - 지갑에서 포인트를 빼고 글을 내 것으로 만든다")
+    public RsData<OrderConfirmResBody> confirmItem(
+            @PathVariable Long id
+    ) {
+        Member actor = rq.getActor();
+
+        Order order = orderService.findById(id).get();
+        orderService.confirm(order, actor);
+        long balance = walletService.findByMemberId(actor.getId()).get().getBalance();
+
+        return new RsData<>(
+                "200-1",
+                "%d번 주문이 확정되었습니다.".formatted(order.getId()),
+                new OrderConfirmResBody(new OrderDto(order), balance)
         );
     }
 

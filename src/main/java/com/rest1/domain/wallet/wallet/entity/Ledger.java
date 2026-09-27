@@ -1,5 +1,6 @@
 package com.rest1.domain.wallet.wallet.entity;
 
+import com.rest1.domain.order.order.entity.Order;
 import com.rest1.global.jpa.entity.BaseEntity;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -26,10 +27,18 @@ public class Ledger extends BaseEntity {
     private long amount;        // 부호 있음. 충전 +1000, 구매 -700
     private long balanceAfter;  // 이 줄이 반영된 직후의 잔액 (나중에 "어디서 어긋났나" 추적용)
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    private Order order;        // 구매·환불 줄은 어느 주문 때문인지 남긴다. 충전은 null
+
     public Ledger(Wallet wallet, LedgerType type, long amount, long balanceAfter) {
+        this(wallet, type, amount, balanceAfter, null);
+    }
+
+    public Ledger(Wallet wallet, LedgerType type, long amount, long balanceAfter, Order order) {
         this.wallet = wallet;
         this.type = type;
         this.amount = amount;
         this.balanceAfter = balanceAfter;
+        this.order = order;
     }
 }
