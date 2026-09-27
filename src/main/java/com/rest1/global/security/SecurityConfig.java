@@ -1,0 +1,84 @@
+package com.rest1.global.security;
+
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
+import org.springframework.security.config.Customizer;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.header.writers.frameoptions.XFrameOptionsHeaderWriter;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+
+import java.util.List;
+
+@Configuration
+@EnableWebSecurity
+public class SecurityConfig {
+
+    @Bean
+    SecurityFilterChain filterChain(
+            HttpSecurity http,
+            CustomAuthenticationEntryPoint authenticationEntryPoint,
+            CustomBearerTokenResolver bearerTokenResolver
+    ) throws Exception {
+        http
+                .authorizeHttpRequests((authorizeHttpRequests) -> authorizeHttpRequests
+                        .requestMatchers("/favicon.ico").permitAll()
+                        .requestMatchers("/h2-console/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/*/posts", "/api/*/posts/{id:\\d+}",
+                                "/api/*/posts/{postId:\\d+}/comments", "/api/*/posts/{postId:\\d+}/comments/{commentId:\\d+}").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/members/login", "/api/v1/members/join").permitAll()
+                        .requestMatchers(HttpMethod.DELETE, "/api/v1/members/logout").permitAll()
+                        .requestMatchers("/api/*/adm/**").hasRole("ADMIN")
+                        .requestMatchers("/api/*/**").authenticated()
+                        .anyRequest().authenticated())
+                .csrf((csrf) -> csrf.disable())
+                .sessionManagement((session) -> session
+                        .sessionCreationPolicy(SessionCreationPolicy.STATELESS))   // 토큰 방식이므로 세션(JSESSIONID)을 만들지 않는다
+                .oauth2ResourceServer((oauth2) -> oauth2
+                        .jwt(Customizer.withDefaults())
+                        .bearerTokenResolver(bearerTokenResolver)              // 토큰을 어디서 꺼낼지 (헤더 → 쿠키)
+                        .authenticationEntryPoint(authenticationEntryPoint))   // 토큰 검증 실패 응답도 우리 양식으로
+                .headers((headers) -> headers
+                        .addHeaderWriter(new XFrameOptionsHeaderWriter(
+                                XFrameOptionsHeaderWriter.XFrameOptionsMode.SAMEORIGIN)))
+                .exceptionHandling(
+                        exceptionHandling -> exceptionHandling
+                                .authenticationEntryPoint(authenticationEntryPoint)
+                                .accessDeniedHandler((request, response, accessDeniedException) -> {
+                                            response.setContentType("application/json;charset=UTF-8"); // charset이 없으면 실제 HTTP에서 한글이 ???로 깨진다
+                                            response.setStatus(403);
+                                            response.getWriter().write(
+                                                    """
+                                                                {
+                                                                    "resultCode": "403-1",
+                                                                    "msg": "권한이 없습니다."
+                                                                }
+                                                            """);
+                                        }
+                                ));
+        ;
+
+        return http.build();
+    }
+
+    @Bean
+    public UrlBasedCorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration configuration =new CorsConfiguration();
+
+        configuration.setAllowedOrigins(List.of("https://cdpn.io", "http://localhost:3000"));
+        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
+
+        configuration.setAllowedHeaders(List.of("*"));
+
+        configuration.setAllowCredentials(true);
+
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/api/**", configuration);
+
+        return source;
+    }
+}
