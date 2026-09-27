@@ -7,6 +7,8 @@ import com.rest1.domain.wallet.wallet.entity.LedgerType;
 import com.rest1.domain.wallet.wallet.entity.Wallet;
 import com.rest1.domain.wallet.wallet.repository.LedgerRepository;
 import com.rest1.domain.wallet.wallet.repository.WalletRepository;
+import com.rest1.global.exception.ServiceException;
+import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -19,6 +21,7 @@ public class WalletService {
 
     private final WalletRepository walletRepository;
     private final LedgerRepository ledgerRepository;
+    private final EntityManager entityManager;
 
     public Wallet create(Member member) {
         return walletRepository.save(new Wallet(member));
@@ -35,9 +38,21 @@ public class WalletService {
         return ledgerRepository.save(new Ledger(wallet, LedgerType.CHARGE, amount, wallet.getBalance()));
     }
 
-    // 구매 차감: 잔액에서 빼고 원장에 - 한 줄. 주문 확정과 같은 트랜잭션 안에서 불린다
+    // 구매 차감: 확인+차감을 DB 문장 하나로(tryPay) 하고, 원장에 - 한 줄.
+    // 잔액 부족이면 UPDATE 가 0행 → 402-1 → 호출한 쪽 트랜잭션이 통째로 롤백된다(원장도 주문 변경도 남지 않는다).
     public Ledger pay(Wallet wallet, Order order) {
-        wallet.pay(order.getPrice());
+        int updated = walletRepository.tryPay(wallet.getId(), order.getPrice());
+        if (updated == 0) {
+            throw new ServiceException("402-1", "잔액이 부족합니다.");
+        }
+
+        // ⚠️ 함정. 위 UPDATE 는 DB 에서만 일어났고, 메모리의 wallet 객체는 아직 옛 잔액을 들고 있다.
+        // 이 한 줄이 없으면 바로 아래 원장의 balanceAfter 와 응답의 balance 가 차감 전 값으로 나간다.
+        // 다시 조회(findByMemberId)해도 소용없다 — 같은 트랜잭션에서는 캐시된 같은 객체가 돌아온다(13강에서 확인).
+        // @Modifying(clearAutomatically = true) 로 캐시를 통째로 비우는 방법도 있지만,
+        // 그러면 같이 들고 있던 order 까지 떨어져 나가 order.confirm() 이 저장되지 않는다. 그래서 이 객체 하나만 새로 읽는다.
+        entityManager.refresh(wallet);
+
         return ledgerRepository.save(new Ledger(wallet, LedgerType.PURCHASE, -order.getPrice(), wallet.getBalance(), order));
     }
 
