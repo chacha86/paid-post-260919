@@ -12,6 +12,7 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 import org.springframework.transaction.annotation.Transactional;
@@ -79,7 +80,10 @@ public class ApiV1PostController {
 
             @NotBlank
             @Size(min = 2, max = 100)
-            String content
+            String content,
+
+            @PositiveOrZero
+            long price          // 요청에 없으면 0(무료). 음수는 400
     ) {
     }
 
@@ -96,7 +100,7 @@ public class ApiV1PostController {
     ) {
 
         Member actor = rq.getActor();
-        Post post = postService.write(actor, reqBody.title, reqBody.content);
+        Post post = postService.write(actor, reqBody.title, reqBody.content, reqBody.price);
 
         return new RsData<>(
                 "201-1",
