@@ -2,6 +2,7 @@ package com.rest1.domain.member.member.service;
 
 import com.rest1.domain.member.member.entity.Member;
 import com.rest1.domain.member.member.repository.MemberRepository;
+import com.rest1.domain.wallet.wallet.service.WalletService;
 import com.rest1.global.exception.ServiceException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -18,6 +19,7 @@ public class MemberService {
     private final MemberRepository memberRepository;
     private final AuthTokenService authTokenService;
     private final PasswordEncoder passwordEncoder;
+    private final WalletService walletService;
 
     public long count() {
         return memberRepository.count();
@@ -31,7 +33,9 @@ public class MemberService {
                 });
 
         Member member = new Member(username, passwordEncoder.encode(password), nickname);
-        return memberRepository.save(member);
+        memberRepository.save(member);
+        walletService.create(member);   // 회원 한 명 = 지갑 하나. 가입과 같은 트랜잭션에서 만든다
+        return member;
     }
 
     public Optional<Member> findByUsername(String username) {

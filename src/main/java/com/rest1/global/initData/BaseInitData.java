@@ -4,6 +4,8 @@ import com.rest1.domain.member.member.entity.Member;
 import com.rest1.domain.member.member.service.MemberService;
 import com.rest1.domain.post.post.entity.Post;
 import com.rest1.domain.post.post.service.PostService;
+import com.rest1.domain.wallet.wallet.entity.Wallet;
+import com.rest1.domain.wallet.wallet.service.WalletService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.ApplicationRunner;
@@ -21,6 +23,7 @@ public class BaseInitData {
     private BaseInitData self;
     private final PostService postService;
     private final MemberService memberService;
+    private final WalletService walletService;
 
     @Bean
     ApplicationRunner initDataRunner() {
@@ -28,6 +31,7 @@ public class BaseInitData {
 
             self.work1();
             self.work2();
+            self.work3();
 
         };
 
@@ -74,5 +78,21 @@ public class BaseInitData {
         post1.addComment(member1, "댓글 1-3");
         post2.addComment(member2, "댓글 2-1");
         post2.addComment(member2, "댓글 2-2");
+    }
+
+    @Transactional
+    public void work3() {
+        if (walletService.countLedgers() > 0) {
+            return;
+        }
+
+        // 초기 잔액 1,000 포인트.
+        // 잔액 컬럼에 1000 을 바로 써넣지 않고 charge() 를 부른다. "충전 +1000" 원장 한 줄이 같이 남아야
+        // 처음부터 불변식(원장 합계 == 잔액)이 성립하고, 뒤의 검증이 샘플 데이터에서부터 의미를 갖는다.
+        for (String username : new String[]{"user1", "user2", "user3"}) {
+            Member member = memberService.findByUsername(username).get();
+            Wallet wallet = walletService.findByMemberId(member.getId()).get();
+            walletService.charge(wallet, 1000);
+        }
     }
 }
