@@ -2,6 +2,7 @@ package com.rest1.domain.order.order.service;
 
 import com.rest1.domain.member.member.entity.Member;
 import com.rest1.domain.order.order.entity.Order;
+import com.rest1.domain.order.order.entity.OrderStatus;
 import com.rest1.domain.order.order.repository.OrderRepository;
 import com.rest1.domain.post.post.entity.Post;
 import com.rest1.domain.wallet.wallet.entity.Wallet;
@@ -46,6 +47,12 @@ public class OrderService {
 
     public Optional<Order> findById(Long id) {
         return orderRepository.findById(id);
+    }
+
+    // 구매한 주문(CONFIRMED/VIEWED)이 있으면 돌려준다
+    public Optional<Order> findPurchased(Long buyerId, Long postId) {
+        return orderRepository.findFirstByBuyerIdAndPostIdAndStatusInOrderByIdDesc(
+                buyerId, postId, List.of(OrderStatus.CONFIRMED, OrderStatus.VIEWED));
     }
 
     public List<Order> findByBuyerId(Long buyerId) {

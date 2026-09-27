@@ -2,6 +2,8 @@ package com.rest1.domain.post.post.controller;
 
 import com.rest1.domain.member.member.entity.Member;
 import com.rest1.domain.member.member.service.MemberService;
+import com.rest1.domain.order.order.entity.Order;
+import com.rest1.domain.order.order.service.OrderService;
 import com.rest1.domain.post.post.dto.PostDto;
 import com.rest1.domain.post.post.entity.Post;
 import com.rest1.domain.post.post.service.PostService;
@@ -19,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Optional;
 
 @RestController
 @RequiredArgsConstructor
@@ -29,6 +32,7 @@ public class ApiV1PostController {
 
     private final PostService postService;
     private final MemberService memberService;
+    private final OrderService orderService;
     private final Rq rq;
 
 
@@ -36,21 +40,40 @@ public class ApiV1PostController {
     @Transactional(readOnly = true)
     @Operation(summary = "글 다건 조회")
     public List<PostDto> getItems() {
+        // 목록은 미리보기다. 유료 글 본문은 누구에게나 가린다 (구매 여부는 단건 조회에서만 따진다)
         return postService.findAll().reversed().stream()
-                .map(PostDto::new)
+                .map(post -> post.isPaid() ? new PostDto(post, PostDto.PAID_MASK) : new PostDto(post))
                 .toList();
     }
 
 
     @GetMapping("/{id}")
-    @Transactional(readOnly = true)
-    @Operation(summary = "글 단건 조회")
+    @Transactional   // 열람 기록(주문 CONFIRMED → VIEWED)을 쓰므로 readOnly 가 아니다
+    @Operation(summary = "글 단건 조회 - 유료 글은 구매자(또는 작성자)만 본문을 본다")
     public PostDto getItem(
             @PathVariable Long id
     ) {
         Post post = postService.findById(id).get();
-        return new PostDto(post);
 
+        if (!post.isPaid()) {
+            return new PostDto(post);
+        }
+
+        Member actor = rq.getActorOrNull();
+        if (actor == null) {
+            return new PostDto(post, PostDto.PAID_MASK);
+        }
+        if (post.getAuthor().getId().equals(actor.getId())) {
+            return new PostDto(post);   // 내 글은 그냥 본다
+        }
+
+        Optional<Order> purchased = orderService.findPurchased(actor.getId(), post.getId());
+        if (purchased.isEmpty()) {
+            return new PostDto(post, PostDto.PAID_MASK);
+        }
+
+        purchased.get().markViewed();   // 열람 = 주문 상태에 남는다 (환불 규칙의 기준, 주제 4)
+        return new PostDto(post);
     }
 
 

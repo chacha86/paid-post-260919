@@ -74,7 +74,7 @@ public class ApiV1PostControllerTest {
                 .andExpect(jsonPath("$[0].createDate").exists())
                 .andExpect(jsonPath("$[0].modifyDate").exists())
                 .andExpect(jsonPath("$[0].title").value("유료 글 2"))
-                .andExpect(jsonPath("$[0].content").value("유료 본문 2 - 구매한 회원만 볼 수 있다"))
+                .andExpect(jsonPath("$[0].content").value("유료 글입니다. 구매 후 열람할 수 있습니다."))   // 목록에서 유료 본문은 가린다
                 .andExpect(jsonPath("$[0].authorId").value(4))
                 .andExpect(jsonPath("$[0].authorName").value("유저2"))
                 .andExpect(jsonPath("$[0].price").value(700))
