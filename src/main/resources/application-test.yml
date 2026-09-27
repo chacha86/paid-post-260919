@@ -1,3 +1,6 @@
+# test 프로필: DB 접속 정보를 여기 적지 않는다.
+# 테스트마다 TestMySqlConfig 가 MySQL 컨테이너를 띄우고 @ServiceConnection 이 url/계정을 DataSource 에 꽂는다.
 spring:
-  datasource:
-    url: jdbc:h2:mem:db_dev;MODE=MySQL
+  jpa:
+    hibernate:
+      ddl-auto: update   # 새 컨테이너의 빈 DB 에 엔티티대로 테이블을 만든다
