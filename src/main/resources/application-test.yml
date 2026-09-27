@@ -4,3 +4,8 @@ spring:
   jpa:
     hibernate:
       ddl-auto: update   # 새 컨테이너의 빈 DB 에 엔티티대로 테이블을 만든다
+    show-sql: false      # System.out 대신 아래 로거로 SQL 을 찍는다 → 로그에 스레드 이름이 붙어 동시성 실습에서 "누가 실행했나" 를 읽을 수 있다
+
+logging:
+  level:
+    org.hibernate.SQL: DEBUG
